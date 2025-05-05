@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -148,4 +148,165 @@
     startTracking();
   </script>
 </body>
+</html> -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Real-Time GPS Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    canvas { margin-bottom: 30px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+    th { background-color: #f2f2f2; }
+    button { margin: 5px; padding: 10px 15px; font-size: 16px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>🚀 Real-Time GPS Tracker</h1>
+  <p id="status">Waiting for location permission...</p>
+
+  <button onclick="startTracking()">Start Tracking</button>
+  <button onclick="stopTracking()">Stop Tracking</button>
+  <button onclick="downloadCSV()">Download CSV</button>
+
+  <canvas id="speedChart" width="400" height="200"></canvas>
+
+  <table id="gpsTable">
+    <thead>
+      <tr>
+        <th>Vehicle ID</th>
+        <th>Time</th>
+        <th>Latitude</th>
+        <th>Longitude</th>
+        <th>Speed (m/s)</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    const vehicleId = "V001"; // Change or fetch dynamically as needed
+    const statusEl = document.getElementById('status');
+    const tableBody = document.getElementById('gpsTable').querySelector('tbody');
+    const ctx = document.getElementById('speedChart').getContext('2d');
+
+    let lastLat = null, lastLon = null, lastTime = null;
+    let latestPosition = null;
+    let trackingInterval = null;
+
+    const dataRows = [];
+
+    const speedData = {
+      labels: [],
+      datasets: [{
+        label: 'Speed (m/s)',
+        data: [],
+        borderColor: 'blue',
+        backgroundColor: 'lightblue',
+        tension: 0.2
+      }]
+    };
+
+    const speedChart = new Chart(ctx, {
+      type: 'line',
+      data: speedData,
+      options: {
+        responsive: true,
+        scales: {
+          x: { title: { display: true, text: 'Time' }},
+          y: { title: { display: true, text: 'Speed (m/s)' }, beginAtZero: true }
+        }
+      }
+    });
+
+    function toRad(x) {
+      return x * Math.PI / 180;
+    }
+
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371000;
+      const dLat = toRad(lat2 - lat1);
+      const dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat/2) ** 2 +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+                Math.sin(dLon/2) ** 2;
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return R * c;
+    }
+
+    function processLocation() {
+      if (!latestPosition) return;
+
+      const lat = latestPosition.coords.latitude;
+      const lon = latestPosition.coords.longitude;
+      const now = Date.now();
+
+      let speed = 0;
+      if (lastLat !== null && lastLon !== null && lastTime !== null) {
+        const distance = calculateDistance(lastLat, lastLon, lat, lon);
+        const timeElapsed = (now - lastTime) / 1000;
+        if (timeElapsed > 0) {
+          speed = distance / timeElapsed;
+        }
+      }
+
+      lastLat = lat;
+      lastLon = lon;
+      lastTime = now;
+
+      const timeStr = new Date(now).toLocaleTimeString();
+
+      const newRow = tableBody.insertRow();
+      newRow.insertCell(0).textContent = vehicleId;
+      newRow.insertCell(1).textContent = timeStr;
+      newRow.insertCell(2).textContent = lat.toFixed(6);
+      newRow.insertCell(3).textContent = lon.toFixed(6);
+      newRow.insertCell(4).textContent = speed.toFixed(2);
+
+      speedData.labels.push(timeStr);
+      speedData.datasets[0].data.push(speed.toFixed(2));
+      speedChart.update();
+
+      dataRows.push([vehicleId, timeStr, lat.toFixed(6), lon.toFixed(6), speed.toFixed(2)]);
+    }
+
+    function startTracking() {
+      statusEl.textContent = "Tracking started...";
+      if (navigator.geolocation) {
+        navigator.geolocation.watchPosition(pos => latestPosition = pos);
+        trackingInterval = setInterval(processLocation, 2000);
+      } else {
+        statusEl.textContent = "Geolocation is not supported.";
+      }
+    }
+
+    function stopTracking() {
+      statusEl.textContent = "Tracking stopped.";
+      clearInterval(trackingInterval);
+    }
+
+    function downloadCSV() {
+      let csv = "Vehicle ID,Time,Latitude,Longitude,Speed (m/s)\n";
+      dataRows.forEach(row => {
+        csv += row.join(",") + "\n";
+      });
+
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = "gps_data.csv";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
 </html>
+
